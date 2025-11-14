@@ -102,45 +102,6 @@ class JointLoss(nn.Module):
         
         return (ce_loss + dice_loss) / 2
 
-# ------------------------------------------------------------------
-# 新增：FairFed-U 损失包装器 (来自 fedu/util/loss.py)
-# ------------------------------------------------------------------
-class FairFedULoss(nn.Module):
-    """
-    包装器： L_total = L_task + lambda_uft * R_UFT
-    """
-    def __init__(self, 
-                 task_loss_fn: nn.Module, 
-                 uft_regularizer: 'UncertaintyTax', 
-                 lambda_uft: float):
-        super().__init__()
-        self.task_loss_fn = task_loss_fn
-        self.uft_regularizer = uft_regularizer
-        self.lambda_uft = lambda_uft
 
-    def forward(self, 
-                output_logits: torch.Tensor, 
-                target: torch.Tensor, 
-                U_bar: torch.Tensor
-               ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        返回: (L_total, L_task, R_UFT, U_i_batch)
-        """
-        
-        # 1. 计算任务损失
-        task_loss = self.task_loss_fn(output_logits, target)
-        
-        # 2. 计算 UFT 正则项
-        # (如果 lambda_uft 为0，跳过计算以节省时间)
-        if self.lambda_uft > 0:
-            reg_loss, U_i_batch = self.uft_regularizer(output_logits, U_bar)
-        else:
-            reg_loss = torch.tensor(0.0, device=output_logits.device)
-            # 我们仍然需要计算 U_i 以便报告
-            with torch.no_grad():
-                 U_i_batch = self.uft_regularizer.entropy_from_logits(output_logits)
-
-        # 3. 计算总损失
-        total_loss = task_loss + self.lambda_uft * reg_loss
         
         return total_loss, task_loss.detach(), reg_loss.detach(), U_i_batch.detach()
